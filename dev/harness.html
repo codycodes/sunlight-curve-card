@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sunlight Curve Card — dev harness</title>
+<style>
+  body {
+    margin: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    transition: background 0.2s;
+  }
+  body.light {
+    background: #f5f5f5;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --divider-color: #e0e0e0;
+    --primary-color: #03a9f4;
+    --card-background-color: #fff;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+  }
+  body.dark {
+    background: #111;
+    --primary-text-color: #e1e1e1;
+    --secondary-text-color: #9b9b9b;
+    --divider-color: #333;
+    --primary-color: #03a9f4;
+    --card-background-color: #1c1c1c;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+  }
+  ha-card {
+    display: block;
+    background: var(--card-background-color);
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  sunlight-curve-card { display: block; width: 420px; }
+  .controls {
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 12px;
+    min-width: 260px;
+  }
+  .controls label { font-size: 13px; display: grid; gap: 4px; }
+  .controls output { font-weight: 600; }
+  select, input, button { font: inherit; padding: 4px 6px; }
+</style>
+</head>
+<body class="light">
+
+<div class="controls">
+  <strong>Dev harness</strong>
+  <label>Preset
+    <select id="preset">
+      <option value="47.65">Seattle (47.65)</option>
+      <option value="64.84">Fairbanks (64.84)</option>
+      <option value="69.65">Tromsø — polar (69.65)</option>
+      <option value="19.43">Mexico City (19.43)</option>
+      <option value="0">Equator (0)</option>
+      <option value="-33.87">Sydney (-33.87)</option>
+      <option value="-54.8">Ushuaia (-54.8)</option>
+    </select>
+  </label>
+  <label>Latitude <output id="latOut">47.65</output>
+    <input type="range" id="lat" min="-90" max="90" step="0.05" value="47.65">
+  </label>
+  <label>Simulated date
+    <input type="date" id="date">
+  </label>
+  <label>Theme
+    <button id="theme">Toggle light/dark</button>
+  </label>
+</div>
+
+<sunlight-curve-card id="card"></sunlight-curve-card>
+
+<script>
+  // Minimal stand-ins for Home Assistant frontend pieces the card touches.
+  customElements.define("ha-card", class extends HTMLElement {});
+
+  // Let the harness simulate any "today": new Date() with no args returns
+  // the selected date; everything else passes through.
+  const RealDate = Date;
+  let simulated = null;
+  window.Date = class extends RealDate {
+    constructor(...args) {
+      if (args.length === 0 && simulated) {
+        super(simulated.getTime());
+      } else {
+        super(...args);
+      }
+    }
+  };
+  window.Date.UTC = RealDate.UTC;
+  window.Date.now = () => (simulated ? simulated.getTime() : RealDate.now());
+  window.Date.parse = RealDate.parse;
+</script>
+<script src="../sunlight-curve-card.js"></script>
+<script>
+  const card = document.getElementById("card");
+  const lat = document.getElementById("lat");
+  const latOut = document.getElementById("latOut");
+  const preset = document.getElementById("preset");
+  const dateInput = document.getElementById("date");
+
+  // Optional URL params for quick scenario checks: ?lat=-33.87&date=2026-12-21
+  const params = new URLSearchParams(location.search);
+  if (params.get("lat")) lat.value = params.get("lat");
+  dateInput.value =
+    params.get("date") || new RealDate().toISOString().slice(0, 10);
+
+  function update() {
+    simulated = dateInput.value
+      ? new RealDate(dateInput.value + "T12:00:00")
+      : null;
+    latOut.textContent = lat.value;
+    card.setConfig({});
+    card.hass = {
+      config: { latitude: Number(lat.value) },
+      locale: { language: navigator.language },
+    };
+  }
+
+  preset.addEventListener("change", () => {
+    lat.value = preset.value;
+    update();
+  });
+  lat.addEventListener("input", update);
+  dateInput.addEventListener("change", update);
+  document.getElementById("theme").addEventListener("click", () => {
+    document.body.classList.toggle("light");
+    document.body.classList.toggle("dark");
+  });
+
+  update();
+</script>
+</body>
+</html>
