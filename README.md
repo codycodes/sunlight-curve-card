@@ -11,6 +11,8 @@ see:
 - When the next longest/shortest day of the year is
 - Where "today" sits on the annual curve, with month labels and the
   solstice extremes marked
+- Hover (or tap) anywhere on the curve to see the daylight for any other
+  date of the year
 
 Everything is computed client-side from your latitude (taken automatically from
 your Home Assistant home location), so the card needs **no sensors, no

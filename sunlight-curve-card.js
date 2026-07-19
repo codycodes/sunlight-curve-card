@@ -10,7 +10,7 @@
  * integrations, or external data.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 const MS_PER_DAY = 86400000;
 
@@ -193,6 +193,7 @@ class SunlightCurveCard extends HTMLElement {
         ${svg}
       </ha-card>
     `;
+    this._attachHover();
   }
 
   _buildSvg(lengths, today, maxDay, minDay, nDays) {
@@ -288,6 +289,21 @@ class SunlightCurveCard extends HTMLElement {
       <circle cx="${tx}" cy="${ty}" r="5" fill="${lineColor}"
               stroke="var(--card-background-color, #fff)" stroke-width="2"/>`;
 
+    // Geometry the hover handlers need to map pointer position back to a day.
+    this._chart = { W, H, padL, plotW, padT, plotH, yMin, yMax, lengths, nDays };
+
+    const hover = `
+      <g id="hover" style="display:none" pointer-events="none">
+        <line id="hover-line" y1="${padT}" y2="${padT + plotH}"
+              stroke="var(--secondary-text-color, #757575)" stroke-width="1"
+              stroke-dasharray="2,2" opacity="0.8"/>
+        <circle id="hover-dot" r="4" fill="${lineColor}"
+                stroke="var(--card-background-color, #fff)" stroke-width="1.5"/>
+        <text id="hover-tip" y="${padT - 5}" text-anchor="middle" class="tip"></text>
+      </g>
+      <rect id="hit" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}"
+            fill="transparent" style="touch-action: pan-y"/>`;
+
     return `
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"
            role="img" aria-label="Day length across the year">
@@ -295,6 +311,15 @@ class SunlightCurveCard extends HTMLElement {
           .lbl {
             font: 10px sans-serif;
             fill: var(--secondary-text-color, #757575);
+          }
+          .tip {
+            font: 11px sans-serif;
+            font-weight: 600;
+            fill: var(--primary-text-color, #212121);
+            paint-order: stroke;
+            stroke: var(--card-background-color, #fff);
+            stroke-width: 3px;
+            stroke-linejoin: round;
           }
         </style>
         ${grid}
@@ -304,7 +329,54 @@ class SunlightCurveCard extends HTMLElement {
         ${months}
         ${extremes}
         ${todayMark}
+        ${hover}
       </svg>`;
+  }
+
+  _attachHover() {
+    const svg = this.shadowRoot?.querySelector("svg");
+    const c = this._chart;
+    if (!svg || !c) return;
+
+    const hit = svg.querySelector("#hit");
+    const group = svg.querySelector("#hover");
+    const line = svg.querySelector("#hover-line");
+    const dot = svg.querySelector("#hover-dot");
+    const tip = svg.querySelector("#hover-tip");
+
+    const year = new Date().getFullYear();
+    const dateFmt = new Intl.DateTimeFormat(this._locale(), {
+      month: "short",
+      day: "numeric",
+    });
+
+    const show = (ev) => {
+      // width:100% + preserved aspect ratio means one uniform scale factor.
+      const rect = svg.getBoundingClientRect();
+      const sx = ((ev.clientX - rect.left) / rect.width) * c.W;
+      let day = Math.round(1 + ((sx - c.padL) / c.plotW) * (c.nDays - 1));
+      day = Math.min(c.nDays, Math.max(1, day));
+
+      const len = c.lengths[day - 1];
+      const hx = c.padL + ((day - 1) / (c.nDays - 1)) * c.plotW;
+      const hy =
+        c.padT + (1 - (len - c.yMin) / (c.yMax - c.yMin)) * c.plotH;
+
+      line.setAttribute("x1", hx);
+      line.setAttribute("x2", hx);
+      dot.setAttribute("cx", hx);
+      dot.setAttribute("cy", hy);
+      tip.textContent = `${dateFmt.format(new Date(year, 0, day))} · ${formatDuration(len)}`;
+      // Keep the label inside the plot near the edges.
+      tip.setAttribute("x", Math.min(c.W - 55, Math.max(c.padL + 40, hx)));
+      group.style.display = "";
+    };
+
+    hit.addEventListener("pointermove", show);
+    hit.addEventListener("pointerdown", show);
+    hit.addEventListener("pointerleave", () => {
+      group.style.display = "none";
+    });
   }
 }
 
